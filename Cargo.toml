@@ -1,0 +1,19 @@
+[package]
+name = "server_master"
+version = "0.1.0"
+authors = ["trionprog <trionprog@gmail.com>"]
+
+[dependencies]
+serde="1.0.2"
+serde_derive="*"
+bincode="*"
+redis = "*"
+cdrs = "1.0.0-beta.9"
+
+[dependencies.uuid]
+version = "0.4.0"
+features = ["serde"]
+
+[dependencies.postgres]
+version = "*"
+features = ["with-uuid"]

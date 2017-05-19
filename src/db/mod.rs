@@ -5,6 +5,9 @@ pub use self::error::Error;
 mod db_clients;
 pub use self::db_clients::{RedisClient,MongoClient,MongoDatabase};
 
+mod global;
+pub use self::global::{Global};
+
 //mod cash;
 //pub use self::cash::Cash;
 
@@ -15,8 +18,8 @@ pub use self::users::{AddUserResult,OnlineStatus};
 mod images;
 pub use self::images::{Images};
 
-mod global;
-pub use self::global::{Global};
+mod forum;
+pub use self::forum::{Forum,Category};
 
 pub type ServerID=i32;
 pub type BinaryData=Vec<u8>;

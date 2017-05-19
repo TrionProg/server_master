@@ -8,33 +8,64 @@ extern crate bincode;
 extern crate redis;
 extern crate cdrs;
 extern crate postgres;
+extern crate mongodb;
+
+#[macro_use(bson, doc)]
+extern crate bson;
 
 pub type BinaryData=Vec<u8>;
 
 mod db;
 
 fn process() -> Result<(),db::Error> {
-    let db_clients=db::DBClients::connect()?;
-    let mut cash=db::Cash::new(&db_clients)?;
+    let redis_users_client=db::RedisClient::connect("redis://127.0.0.1/1")?;
+    let redis_images_client=db::RedisClient::connect("redis://127.0.0.1/2")?;
+    let mongo_client=db::MongoClient::connect("mongodb://localhost:27017/")?;
+    let mondo_users_db=mongo_client.get_db("users");
 
+    //let mut cash=db::Cash::new(&db_clients)?;
+
+    /*
     match cash.get_file("55d16d15-5006-4d90-b682-971f14ac568f")? {
         Some( data ) => println!("Binaty data"),
         None => println!("Not found"),
     }
+    */
 
-    let mut users=db::Users::new(&db_clients)?;
+    let mut users=db::Users::new(&redis_users_client, &mondo_users_db)?;
+    let mut images=db::Images::new(&redis_images_client)?;
 
-    match users.add_user("newbie","455")? {
-        db::AddUserResult::Success => println!("success"),
+    match users.add_user("newbie13","455")? {
+        db::AddUserResult::Success(id) => println!("success {}",id),
         db::AddUserResult::UserExists => println!("exists"),
     }
 
-    let user_id=users.get_user_id_by_login("newbie")?.unwrap();
+    let user_id=users.get_user_id_by_login("newbie13")?.unwrap();
     //println!("{:?}",users.get_user_id_by_login("newbie")?);
 
-    let user=users.get_user_short_information_by_id(user_id)?.unwrap();
+    let user=users.get_short_user_information_by_id(user_id)?.unwrap();
 
     println!("{} {}",user.login, user.avatar);
+
+    println!("{} {}",users.user_exists_by_id(user_id)?, users.user_exists_by_id(user_id)?);
+
+    //println!("Added:{}",users.give_award(user_id,"Held des Vaterland","für die Dummheit".to_string())?.is_some());
+    //users.smt()?;
+
+    let img=images.add_image(13,vec!(1,4,6,2,4))?;
+    println!("{}",img);
+    println!("{:?}",images.get_image_data(img)?);
+
+    match users.get_full_user_information_by_id(user_id)? {
+        Some( full_information ) => {
+            println!("awards");
+            let awards=full_information.get_awards()?;
+            for award in awards.iter() {
+                println!("award \"{}\" for \"{}\"",award.name,award.description);
+            }
+        },
+        None => {}
+    }
 
     Ok(())
 }

@@ -14,7 +14,7 @@ pub struct Cash {
 
 impl Cash {
     pub fn new(db_clients:&DBClients) -> Result<Self,Error> {
-        let redis_connection = db_clients.redis.get_connection()?;
+        let redis_connection = db_clients.redis_client.get_connection()?;
 
         let cassandra_address="127.0.0.1:9042";
         let cassandra_transport = cdrs::transport::TransportTcp::new(cassandra_address)?;

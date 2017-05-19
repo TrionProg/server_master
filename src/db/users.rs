@@ -3,22 +3,27 @@ use bincode;
 use redis;
 use cdrs;
 use postgres;
+use mongodb;
+
+
+use bson;
 
 use uuid::Uuid;
 
 use super::Error;
-use super::DBClients;
-use super::{BinaryData,ServerID};
+use super::{BinaryData,ServerID,UserID};
+use super::{RedisClient,MongoDatabase};
+use super::{RedisCollection,MongoCollection,CassandraSession,PostgresSession};
 
-type CassandraSession=cdrs::client::Session<cdrs::authenticators::NoneAuthenticator, cdrs::transport::TransportTcp>;
-pub type UserID=i32;
+use postgres::types::ToSql;
+use redis::Commands;
+use bson::Bson;
 
-const FILE_EXPIRATION:usize=30;
+const USER_EXPIRATION:usize=30;
 
-use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct UserShortInformation{
+pub struct ShortUserInformation{
     pub login:String,
     pub avatar:Uuid,
     pub rating:f32,
@@ -26,14 +31,14 @@ pub struct UserShortInformation{
 }
 
 pub struct Users{
-    redis_connection:redis::Connection,
-    cassandra_session:CassandraSession,
-    postgresql_connection:postgres::Connection,
+    redis_users:RedisCollection,
+    postgres_session:PostgresSession,
+    mongo_users:MongoCollection,
 }
 
 pub enum AddUserResult{
     UserExists,
-    Success,
+    Success(UserID),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,31 +48,42 @@ pub enum OnlineStatus{
     Playing(ServerID),
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Award{
+    pub id:i32,
+    pub name:String,
+    pub icon:Uuid,
+    pub description:String,
+}
+
+pub struct FullUserInformation {
+    pub user_id:UserID,
+    pub doc:bson::ordered::OrderedDocument,
+}
 
 impl Users {
-    pub fn new(db_clients:&DBClients) -> Result<Self,Error> {
-        let redis_connection = Self::connect_to_redis(db_clients)?;
-        let cassandra_session = Self::connect_to_cassandra(db_clients)?;
-        let postgresql_connection = Self::connect_to_postgresql(db_clients)?;
+    pub fn new(redis_users_client:&RedisClient, mongo_db:&MongoDatabase) -> Result<Self,Error> {
+        let redis_users = redis_users_client.get_collection()?;
+        //let cassandra_session = Self::connect_to_cassandra()?;
+        let postgres_session = Self::connect_to_postgres()?;
+        let mongo_users = mongo_db.get_collection("users");
 
         let users=Users{
-            redis_connection,
-            cassandra_session,
-            postgresql_connection,
+            redis_users,
+            //cassandra_session,
+            postgres_session,
+            mongo_users,
         };
 
         Ok( users )
     }
 
-    fn connect_to_redis(db_clients:&DBClients) -> Result<redis::Connection,Error> {
-        let redis_connection= db_clients.redis.get_connection()?;
-
-        Ok( redis_connection )
-    }
-
-    fn connect_to_cassandra(db_clients:&DBClients) -> Result<CassandraSession,Error> {
+    fn connect_to_cassandra() -> Result<CassandraSession,Error> {
         let cassandra_address="127.0.0.1:9042";
-        let cassandra_transport = cdrs::transport::TransportTcp::new(cassandra_address)?;
+        let cassandra_transport = match cdrs::transport::TransportTcp::new(cassandra_address) {
+            Ok( cassandra_transport ) => cassandra_transport,
+            Err( e ) => return Err(Error::CassandraConnectionError( Box::new(e) )),
+        };
         let cassandra_client = cdrs::client::CDRS::new(cassandra_transport, cdrs::authenticators::NoneAuthenticator);
         let mut cassandra_session = cassandra_client.start(cdrs::compression::Compression::None)?;
 
@@ -82,16 +98,16 @@ impl Users {
         Ok( cassandra_session )
     }
 
-    fn connect_to_postgresql(db_clients:&DBClients) -> Result<postgres::Connection,Error> {
+    fn connect_to_postgres() -> Result<PostgresSession,Error> {
         let tls_mode = postgres::TlsMode::None;
-        let postgresql_connection = postgres::Connection::connect("postgresql://postgresql_user:user@localhost/users",tls_mode)?;
+        let postgres_session = PostgresSession::connect("postgresql://postgresql_user:user@localhost/users",tls_mode)?;
 
-        Ok( postgresql_connection )
+        Ok( postgres_session )
     }
 
+
     pub fn add_user(&self, login:&str, password:&str) -> Result<AddUserResult,Error> {
-        use postgres::types::ToSql;
-        let exists_result_rows=self.postgresql_connection.query(
+        let exists_result_rows=self.postgres_session.query(
             "SELECT EXISTS(SELECT 1 FROM users WHERE login=$1)",
             &[&login]
         )?;
@@ -104,7 +120,7 @@ impl Users {
             }
         }
 
-        let insert_result=self.postgresql_connection.execute(
+        let insert_result=self.postgres_session.execute(
             "INSERT INTO users (login,password,avatar,rating) VALUES ($1, $2, NULL, 0.0)",
             &[&login,&password]
         )?;
@@ -113,11 +129,69 @@ impl Users {
             return Ok(AddUserResult::UserExists);
         }
 
-        Ok( AddUserResult::Success )
+        let user_id=match self.get_user_id_by_login(login)?{
+            Some( user_id ) => user_id,
+            None => return Ok(AddUserResult::UserExists),
+        };
+
+
+        /*
+        let award=Award{
+            id:4,
+            name:String::from("aaa"),
+            icon:Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap(),
+
+            description:String::from("newbie"),
+        };
+
+        let serialized_award = bson::to_bson(&award)?;
+        println!("{:?}",serialized_award);
+
+        let award = bson::from_bson( bson::Bson::Document(doc.clone()) )?;
+        */
+
+
+        /*
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct Person {
+            #[serde(rename = "_id")]  // Use MongoDB's special primary key field name when serializing
+            pub id: String,
+            pub name: String,
+            pub age: u32
+        }
+
+        let person = Person {
+            id: "12345".to_string(),
+            name: "Emma".to_string(),
+            age: 3
+        };
+
+        let serialized_person = bson::to_bson(&person).unwrap();  // Serialize
+        */
+
+        let doc = doc! {
+            "_id" => user_id,
+            //"avatar" =>
+            "awards" => [],
+            "history" => [],
+            "mods" => [],
+            "threads" => []
+        };
+
+        let concern=mongodb::common::WriteConcern{
+            w:1,//TODO:change to number of hosts
+            w_timeout:100,
+            j:true,
+            fsync:true,
+        };
+
+        self.mongo_users.insert_one(doc, Some(concern))?;
+
+        Ok( AddUserResult::Success(user_id) )
     }
 
     pub fn get_user_id_by_login(&self, login:&str) -> Result<Option<UserID>, Error> {
-        let result_rows=self.postgresql_connection.query(
+        let result_rows=self.postgres_session.query(
             "SELECT id FROM users WHERE login=$1",
             &[&login]
         )?;
@@ -131,33 +205,33 @@ impl Users {
         }
     }
 
-    pub fn get_user_short_information_by_id(&self, user_id:UserID) -> Result<Option<UserShortInformation>,Error> {
-        use redis::Commands;
-
-        let data:Option<BinaryData> = self.redis_connection.get(user_id)?;
+    pub fn get_short_user_information_by_id(&self, user_id:UserID) -> Result<Option<ShortUserInformation>,Error> {
+        let data:Option<BinaryData> = self.redis_users.get(user_id)?;
 
         match data {
             Some( data ) => {
-                let user:UserShortInformation=bincode::deserialize(&data)?;
+                let user:ShortUserInformation=bincode::deserialize(&data)?;
                 return Ok( Some(user) );
             },
             None => {},
         }
 
-        let result_rows=self.postgresql_connection.query(
+        let result_rows=self.postgres_session.query(
             "SELECT login,avatar,rating FROM users WHERE id=$1",
             &[&user_id]
         )?;
 
-        println!("--");
-
         if result_rows.len()>0 {
             let login:String=result_rows.get(0).get(0);
-            let avatar:Uuid=result_rows.get(0).get(1);
+            let avatar:Option<Uuid>=result_rows.get(0).get(1);
+            let avatar=match avatar {
+                Some( a ) => a,
+                None => Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap(),
+            };
             let rating:f32=result_rows.get(0).get(2);
             let online_status=OnlineStatus::Offline;
 
-            let user=UserShortInformation{
+            let user=ShortUserInformation{
                 login,
                 avatar,
                 rating,
@@ -165,7 +239,7 @@ impl Users {
             };
 
             let data:BinaryData=bincode::serialize(&user,bincode::Bounded(96))?;
-            self.redis_connection.set_ex(user_id, data, FILE_EXPIRATION)?;
+            self.redis_users.set_ex(user_id, data, USER_EXPIRATION)?;
 
             Ok( Some(user) )
         }else{
@@ -173,4 +247,153 @@ impl Users {
         }
     }
 
+    pub fn user_exists_by_id(&self, user_id:UserID) -> Result<bool,Error> {
+        let redis_exists:bool=self.redis_users.exists(user_id)?;
+
+        if redis_exists {
+            return Ok(true);
+        }
+
+        let exists_result_rows=self.postgres_session.query(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1)",
+            &[&user_id]
+        )?;
+
+        if exists_result_rows.len()>0 {
+            let exists:bool=exists_result_rows.get(0).get(0);
+
+            if exists {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    pub fn get_full_user_information_by_id(&self, user_id:UserID) -> Result<Option<FullUserInformation>,Error> {
+        let find_filter=doc! {
+            "_id" => user_id
+        };
+
+        let find_option=mongodb::coll::options::FindOptions{
+            max_time_ms:Some( 25 ),
+            ..Default::default()
+        };
+
+        let doc=self.mongo_users.find_one(Some(find_filter),Some(find_option))?;
+
+        println!("{:?}",doc);
+
+        match doc {
+            Some( doc ) => {
+                let full_information=FullUserInformation{
+                    user_id:user_id,
+                    doc:doc,
+                };
+
+                Ok( Some(full_information) )
+            },
+            None => Ok( None ),
+        }
+    }
+
+    pub fn give_award(&self, user_id:UserID, award_name:&str, description:String) -> Result<Option<usize>,Error> {
+        let result_rows=self.postgres_session.query(
+            "SELECT id,icon FROM awards WHERE name=$1",
+            &[&award_name]
+        )?;
+
+        if result_rows.len()>0 {
+            let postgres_award=result_rows.get(0);
+            let id:i32=postgres_award.get(0);
+            let icon:Uuid=postgres_award.get(1);
+
+            let award=Award{
+                id:id,
+                name:String::from(award_name),
+                icon:icon,
+                description:description,
+            };
+
+            let serialized_award = bson::to_bson(&award)?;
+
+            let find_filter=doc! {
+                "_id" => user_id
+            };
+
+            let update_doc=doc! {
+                "$push" => { "awards" => serialized_award }
+            };
+
+            self.mongo_users.find_one_and_update( find_filter ,update_doc, None );//TODO:None
+
+            Ok( Some(id as usize) )
+        }else{
+            Ok( None )
+        }
+    }
+
+    //modify award (chande icon and description
+
+
+    pub fn smt(&self) -> Result<(),Error> {
+        #[derive(Serialize, Deserialize, Debug)]
+        pub struct Person {
+            #[serde(rename = "_id")]  // Use MongoDB's special primary key field name when serializing
+            pub id: String,
+            pub name: String,
+            pub age: usize
+        }
+
+        let person = Person {
+            id: "12345".to_string(),
+            name: "Emma".to_string(),
+            age: 3,
+        };
+
+        let serialized_person = bson::to_bson(&person)?;  // Serialize
+
+        match serialized_person {
+            Bson::Document(ref doc) =>
+                println!("{:?}",doc),
+            _ => {},
+        }
+
+        // Deserialize the document into a Person instance
+        //match serialized_person {
+        //    Bson::Document(ref d) => {
+                let person2:Person = bson::from_bson(serialized_person).unwrap();
+        //    },
+        //    _ => {},
+        //}
+
+        Ok(())
+    }
+}
+
+impl FullUserInformation {
+    pub fn get_awards(&self) -> Result<Vec<Award>,Error> {
+        match self.doc.get("awards") {
+            Some(&Bson::Array(ref mongo_awards)) => {
+                if mongo_awards.len()==0 {
+                    return Ok(Vec::new());
+                }
+
+                let mut awards=Vec::with_capacity(mongo_awards.len());
+                for mongo_award in mongo_awards.iter() {
+                    match *mongo_award {
+                        Bson::Document( ref doc ) => {
+                            let award:Award = bson::from_bson( bson::Bson::Document(doc.clone()) ).unwrap();//NOTE:clone!
+
+                            awards.push(award);
+                        },
+                        _ => return Err(Error::Other( format!("Award of user \"{}\" must be struct",self.user_id) )),
+                    }
+                }
+
+                Ok( awards )
+            },
+            _ => Err(Error::Other( format!("Awards of user \"{}\" must be array",self.user_id) )),
+        }
+    }
 }

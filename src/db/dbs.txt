@@ -1,0 +1,25 @@
+CREATE TABLE awards (id serial primary key, name char(64) NOT NULL, icon uuid NOT NULL);
+GRANT SELECT, UPDATE, INSERT, DELETE ON awards TO postgresql_user;
+CREATE TABLE images (
+    id uuid PRIMARY KEY,
+    author integer NOT NULL,
+    date timestamp NOT NULL,
+    data bytea NOT NULL
+);
+GRANT SELECT, UPDATE, INSERT, DELETE ON images TO postgresql_user;
+
+
+cqlsh
+CREATE KEYSPACE master_server
+  WITH REPLICATION = {
+   'class' : 'SimpleStrategy',
+   'replication_factor' : 1
+  };
+USE master_server;
+CREATE TABLE images (id uuid primary key, author int, date timestamp, data blob);
+CREATE TABLE images (
+    id uuid PRIMARY KEY,
+    author integer NOT NULL,
+    date timestamp NOT NULL,
+    data bytea NOT NULL
+);

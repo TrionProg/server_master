@@ -1,10 +1,10 @@
+use std;
 use bincode;
 
 use redis;
 use cdrs;
 use postgres;
 use mongodb;
-
 
 use bson;
 
@@ -63,6 +63,19 @@ impl Images {
         }
     }
 
+    pub fn add_from_file(&mut self, author:UserID, path_to_file:&std::path::Path) -> Result<Uuid,Error> {
+        use std::fs::File;
+        use std::io::BufReader;
+        use std::io::prelude::*;
+
+        let file = File::open(path_to_file)?;
+        let mut buf_reader = BufReader::new(file);
+        let mut content = Vec::new();
+        buf_reader.read_to_end(&mut content)?;
+
+        self.add_image(author, content)
+    }
+
     pub fn get_image_data(&mut self, id:Uuid) -> Result<Option<BinaryData>,Error> {
         let data:Option<BinaryData> = self.redis_images.get( id.to_string() )?;
 
@@ -94,7 +107,7 @@ impl Images {
             &[&id]
         )?;
 
-        if insert_result!=1 {
+        if remove_result!=1 {
             return Ok(false);
         }
 

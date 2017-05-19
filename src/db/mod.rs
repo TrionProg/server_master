@@ -15,6 +15,9 @@ pub use self::users::{AddUserResult,OnlineStatus};
 mod images;
 pub use self::images::{Images};
 
+mod global;
+pub use self::global::{Global};
+
 pub type ServerID=i32;
 pub type BinaryData=Vec<u8>;
 pub type UserID=i32;

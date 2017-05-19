@@ -32,6 +32,7 @@ pub struct ShortUserInformation{
 
 pub struct Users{
     redis_users:RedisCollection,
+    redis_global:RedisCollection,
     postgres_session:PostgresSession,
     mongo_users:MongoCollection,
 }
@@ -62,14 +63,16 @@ pub struct FullUserInformation {
 }
 
 impl Users {
-    pub fn new(redis_users_client:&RedisClient, mongo_db:&MongoDatabase) -> Result<Self,Error> {
+    pub fn new(redis_users_client:&RedisClient, redis_global_client:&RedisClient, mongo_db:&MongoDatabase) -> Result<Self,Error> {
         let redis_users = redis_users_client.get_collection()?;
+        let redis_global = redis_global_client.get_collection()?;
         //let cassandra_session = Self::connect_to_cassandra()?;
         let postgres_session = Self::connect_to_postgres()?;
         let mongo_users = mongo_db.get_collection("users");
 
         let users=Users{
             redis_users,
+            redis_global,
             //cassandra_session,
             postgres_session,
             mongo_users,
@@ -120,9 +123,21 @@ impl Users {
             }
         }
 
+        let default_avatar_small_b:BinaryData=match self.redis_global.get("default_avatar_small")? {
+            Some( data ) => data,
+            None => panic!("no \"default_avatar_small\" in redis"),
+        };
+        let default_avatar_small:Uuid=bincode::deserialize(&default_avatar_small_b)?;
+
+        let default_avatar_big_b:BinaryData=match self.redis_global.get("default_avatar_big")? {
+            Some( data ) => data,
+            None => panic!("no \"default_avatar_big\" in redis"),
+        };
+        let default_avatar_big:Uuid=bincode::deserialize(&default_avatar_big_b)?;
+
         let insert_result=self.postgres_session.execute(
-            "INSERT INTO users (login,password,avatar,rating) VALUES ($1, $2, NULL, 0.0)",
-            &[&login,&password]
+            "INSERT INTO users (login,password,avatar,rating) VALUES ($1, $2, $3, 0.0)",
+            &[&login,&password,&default_avatar_small]
         )?;
 
         if insert_result!=1 {
@@ -134,44 +149,11 @@ impl Users {
             None => return Ok(AddUserResult::UserExists),
         };
 
-
-        /*
-        let award=Award{
-            id:4,
-            name:String::from("aaa"),
-            icon:Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap(),
-
-            description:String::from("newbie"),
-        };
-
-        let serialized_award = bson::to_bson(&award)?;
-        println!("{:?}",serialized_award);
-
-        let award = bson::from_bson( bson::Bson::Document(doc.clone()) )?;
-        */
-
-
-        /*
-        #[derive(Serialize, Deserialize, Debug)]
-        pub struct Person {
-            #[serde(rename = "_id")]  // Use MongoDB's special primary key field name when serializing
-            pub id: String,
-            pub name: String,
-            pub age: u32
-        }
-
-        let person = Person {
-            id: "12345".to_string(),
-            name: "Emma".to_string(),
-            age: 3
-        };
-
-        let serialized_person = bson::to_bson(&person).unwrap();  // Serialize
-        */
+        let default_avatar_big_s=default_avatar_big.to_string();
 
         let doc = doc! {
             "_id" => user_id,
-            //"avatar" =>
+            "avatar" => default_avatar_big_s,
             "awards" => [],
             "history" => [],
             "mods" => [],
@@ -222,12 +204,9 @@ impl Users {
         )?;
 
         if result_rows.len()>0 {
-            let login:String=result_rows.get(0).get(0);
-            let avatar:Option<Uuid>=result_rows.get(0).get(1);
-            let avatar=match avatar {
-                Some( a ) => a,
-                None => Uuid::parse_str("936DA01F9ABD4d9d80C702AF85C822A8").unwrap(),
-            };
+            let login_raw:String=result_rows.get(0).get(0);
+            let login=login_raw.trim().to_string();
+            let avatar:Uuid=result_rows.get(0).get(1);
             let rating:f32=result_rows.get(0).get(2);
             let online_status=OnlineStatus::Offline;
 

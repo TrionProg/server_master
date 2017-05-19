@@ -18,6 +18,7 @@ pub type BinaryData=Vec<u8>;
 mod db;
 
 fn process() -> Result<(),db::Error> {
+    let redis_global_client=db::RedisClient::connect("redis://127.0.0.1/0")?;
     let redis_users_client=db::RedisClient::connect("redis://127.0.0.1/1")?;
     let redis_images_client=db::RedisClient::connect("redis://127.0.0.1/2")?;
     let mongo_client=db::MongoClient::connect("mongodb://localhost:27017/")?;
@@ -32,29 +33,29 @@ fn process() -> Result<(),db::Error> {
     }
     */
 
-    let mut users=db::Users::new(&redis_users_client, &mondo_users_db)?;
+    let mut global=db::Global::new(&redis_global_client, &mondo_users_db)?;
+    global.load()?;
+    let mut users=db::Users::new(&redis_users_client, &redis_global_client, &mondo_users_db)?;
     let mut images=db::Images::new(&redis_images_client)?;
 
-    match users.add_user("newbie13","455")? {
+    match users.add_user("user0","455")? {
         db::AddUserResult::Success(id) => println!("success {}",id),
         db::AddUserResult::UserExists => println!("exists"),
     }
 
-    let user_id=users.get_user_id_by_login("newbie13")?.unwrap();
-    //println!("{:?}",users.get_user_id_by_login("newbie")?);
+    let user_id=users.get_user_id_by_login("user0")?.unwrap();
+    println!("{:?}",users.get_user_id_by_login("newbie")?);
 
     let user=users.get_short_user_information_by_id(user_id)?.unwrap();
-
+    use std::path::Path;
+    //global.set_default_avatars_from_files(&mut images, Path::new("small_avatar.png"), Path::new("big_avatar.png"))?;
+    println!("{}",user.login.len());
     println!("{} {}",user.login, user.avatar);
 
     println!("{} {}",users.user_exists_by_id(user_id)?, users.user_exists_by_id(user_id)?);
 
     //println!("Added:{}",users.give_award(user_id,"Held des Vaterland","für die Dummheit".to_string())?.is_some());
     //users.smt()?;
-
-    let img=images.add_image(13,vec!(1,4,6,2,4))?;
-    println!("{}",img);
-    println!("{:?}",images.get_image_data(img)?);
 
     match users.get_full_user_information_by_id(user_id)? {
         Some( full_information ) => {

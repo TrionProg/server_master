@@ -11,7 +11,7 @@ use bson;
 use uuid::{Uuid,UuidVersion};
 
 use super::Error;
-use super::{BinaryData,ServerID,UserID};
+use super::{BinaryData,ServerID,UserID,ImageID};
 use super::{RedisClient,MongoDatabase};
 use super::{RedisCollection,MongoCollection,CassandraSession,PostgresSession};
 
@@ -48,7 +48,7 @@ impl Images {
         Ok( postgres_session )
     }
 
-    pub fn add_image(&mut self, author:UserID, data:BinaryData) -> Result<Uuid,Error> {
+    pub fn add_image(&mut self, author:UserID, data:BinaryData) -> Result<ImageID,Error> {
         loop{
             let id=Uuid::new(UuidVersion::Random).unwrap();
 
@@ -63,7 +63,7 @@ impl Images {
         }
     }
 
-    pub fn add_from_file(&mut self, author:UserID, path_to_file:&std::path::Path) -> Result<Uuid,Error> {
+    pub fn add_from_file(&mut self, author:UserID, path_to_file:&std::path::Path) -> Result<ImageID,Error> {
         use std::fs::File;
         use std::io::BufReader;
         use std::io::prelude::*;
@@ -76,7 +76,7 @@ impl Images {
         self.add_image(author, content)
     }
 
-    pub fn get_image_data(&mut self, id:Uuid) -> Result<Option<BinaryData>,Error> {
+    pub fn get_image_data(&mut self, id:ImageID) -> Result<Option<BinaryData>,Error> {
         let data:Option<BinaryData> = self.redis_images.get( id.to_string() )?;
 
         match data {
@@ -101,7 +101,7 @@ impl Images {
         }
     }
 
-    pub fn remove_image(&mut self, id:Uuid) -> Result<bool,Error> {
+    pub fn remove_image(&mut self, id:ImageID) -> Result<bool,Error> {
         let remove_result=self.postgres_session.execute(
             "DELETE FROM images WHERE id = $1;",
             &[&id]

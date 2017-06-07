@@ -19,7 +19,10 @@ mod images;
 pub use self::images::{Images};
 
 mod forum;
-pub use self::forum::{Forum,Category};
+pub use self::forum::{Forum};
+
+mod generate;
+pub use self::generate::fill;
 
 pub type ServerID=i32;
 pub type BinaryData=Vec<u8>;
@@ -27,6 +30,8 @@ pub type UserID=i32;
 pub type Date=chrono::DateTime<chrono::UTC>;
 pub type ThreadID=Uuid;
 pub type PostID=Uuid;
+pub type Category=i32;
+pub type ImageID=Uuid;
 
 use chrono;
 use uuid::Uuid;

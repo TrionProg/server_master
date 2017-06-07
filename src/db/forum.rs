@@ -12,7 +12,7 @@ use bson;
 use uuid::{Uuid,UuidVersion};
 
 use super::Error;
-use super::{BinaryData,ServerID,UserID,Date,ThreadID,PostID};
+use super::{BinaryData,ServerID,UserID,Date,ThreadID,PostID,Category};
 use super::{RedisClient,MongoDatabase};
 use super::{RedisCollection,MongoCollection,CassandraSession,PostgresSession};
 
@@ -50,12 +50,6 @@ pub struct Forum {
     cassandra_create_post_query:BodyResResultPrepared,
     cassandra_get_post_query:BodyResResultPrepared,
     //mongo_users:MongoCollection,
-}
-
-#[derive(Copy,Clone)]
-pub enum Category {
-    About,
-    Talk
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -202,7 +196,7 @@ impl Forum {
 
             let insert_result=self.postgres_session.execute(
                 "INSERT INTO threads (id, author, category, caption) VALUES($1, $2, $3, $4)",
-                &[&id,&author,&category.to_i32(),&caption]
+                &[&id,&author,&category,&caption]
             )?;
 
             if insert_result==1 {
@@ -256,7 +250,7 @@ impl Forum {
     pub fn get_threads(&self,category:Category) -> Result<Vec<Thread>,Error> {
         let result_rows=self.postgres_session.query(
             "SELECT id, author, caption FROM threads WHERE category=$1",
-            &[&category.to_i32()]
+            &[&category]
         )?;
 
         let mut threads=Vec::with_capacity(128);
@@ -305,14 +299,5 @@ impl Forum {
         }
 
         Ok(post_ids)
-    }
-}
-
-impl Category {
-    pub fn to_i32(&self) -> i32 {
-        match *self {
-            Category::About => 0,
-            Category::Talk => 1,
-        }
     }
 }

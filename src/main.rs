@@ -15,9 +15,12 @@ extern crate mongodb;
 #[macro_use(bson, doc)]
 extern crate bson;
 
-pub type BinaryData=Vec<u8>;
+extern crate iron;
+extern crate router;
+extern crate urlencoded;
 
 mod db;
+mod web;
 
 fn process() -> Result<(),db::Error> {
     let redis_global_client=db::RedisClient::connect("redis://127.0.0.1/0")?;
@@ -42,6 +45,19 @@ fn process() -> Result<(),db::Error> {
     let mut users=db::Users::new(&redis_users_client, &redis_global_client, &mondo_users_db)?;
     let mut images=db::Images::new(&redis_images_client)?;
     let mut forum=db::Forum::new(&redis_global_client, &redis_posts_client, &mondo_users_db)?;
+
+    let web_interface=match web::WebInterface::run(global,users,images,forum) {
+        Ok(wi) => wi,
+        Err(e) => return Err(db::Error::Other(e)),
+    };
+
+    let mut input = String::with_capacity(80);
+
+    std::io::stdin().read_line(&mut input);
+
+    web_interface.close();
+
+    /*
 
     match users.add_user("user0","455")? {
         db::AddUserResult::Success(id) => println!("success {}",id),
@@ -88,6 +104,9 @@ fn process() -> Result<(),db::Error> {
         },
         None => {}
     }
+    */
+
+    //db::fill();
 
     Ok(())
 }

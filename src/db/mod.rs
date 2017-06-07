@@ -24,6 +24,11 @@ pub use self::forum::{Forum,Category};
 pub type ServerID=i32;
 pub type BinaryData=Vec<u8>;
 pub type UserID=i32;
+pub type Date=chrono::DateTime<chrono::UTC>;
+pub type ThreadID=Uuid;
+
+use chrono;
+use uuid::Uuid;
 
 use redis;
 use mongodb;

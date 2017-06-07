@@ -11,6 +11,8 @@ GRANT SELECT, UPDATE, INSERT, DELETE ON images TO postgresql_user;
 CREATE TABLE threads (
     id uuid PRIMARY KEY,
     author integer NOT NULL,
+    category integer NOT NULL,
+    caption text NOT NULL,
     first_post uuid NOT NULL,
     last_post uuid NOT NULL,
     first_post_date timestamp NOT NULL,
@@ -28,7 +30,7 @@ CREATE KEYSPACE master_server
 USE master_server;
 CREATE TABLE posts (
     id uuid primary key,
-    author int, 
+    author int,
     date timestamp,
     last_edit timestamp,
     message text,

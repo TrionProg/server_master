@@ -11,6 +11,7 @@ redis = "*"
 cdrs = "1.0.0-rc.1"
 bson = ">=0.7.0"
 mongodb = ">=0.2.7"
+byteorder = "1.0.0"
 
 [dependencies.uuid]
 version = "0.5.0"
@@ -18,7 +19,11 @@ features = ["serde","v4"]
 
 [dependencies.postgres]
 path = "../rust-postgres/postgres"
-features = ["with-uuid"]
+features = ["with-uuid", "with-chrono"]
+
+[dependencies.chrono]
+version = "0.3.0"
+features = ["serde"]
 
 [replace]
 "uuid:0.4.0" = { path = "../uuid" }

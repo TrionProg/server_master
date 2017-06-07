@@ -1,9 +1,11 @@
 #[macro_use]
 extern crate serde_derive;
 
+extern crate chrono;
 extern crate uuid;
 extern crate serde;
 extern crate bincode;
+extern crate byteorder;
 
 extern crate redis;
 extern crate cdrs;
@@ -21,6 +23,8 @@ fn process() -> Result<(),db::Error> {
     let redis_global_client=db::RedisClient::connect("redis://127.0.0.1/0")?;
     let redis_users_client=db::RedisClient::connect("redis://127.0.0.1/1")?;
     let redis_images_client=db::RedisClient::connect("redis://127.0.0.1/2")?;
+    //let redis_threads_watchers_client=db::RedisClient::connect("redis://127.0.0.1/3")?;
+    let redis_hot_threads_client=db::RedisClient::connect("redis://127.0.0.1/4")?;
     let mongo_client=db::MongoClient::connect("mongodb://localhost:27017/")?;
     let mondo_users_db=mongo_client.get_db("users");
 
@@ -37,6 +41,7 @@ fn process() -> Result<(),db::Error> {
     global.load()?;
     let mut users=db::Users::new(&redis_users_client, &redis_global_client, &mondo_users_db)?;
     let mut images=db::Images::new(&redis_images_client)?;
+    let mut forum=db::Forum::new(&redis_global_client, &redis_hot_threads_client, &mondo_users_db)?;
 
     match users.add_user("user0","455")? {
         db::AddUserResult::Success(id) => println!("success {}",id),
@@ -56,6 +61,9 @@ fn process() -> Result<(),db::Error> {
 
     //println!("Added:{}",users.give_award(user_id,"Held des Vaterland","für die Dummheit".to_string())?.is_some());
     //users.smt()?;
+
+    let a=forum.create_first_post(14, chrono::offset::utc::UTC::now(), "hello world".to_string())?;
+    println!("{}",a);
 
     match users.get_full_user_information_by_id(user_id)? {
         Some( full_information ) => {

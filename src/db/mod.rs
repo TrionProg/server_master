@@ -26,6 +26,7 @@ pub type BinaryData=Vec<u8>;
 pub type UserID=i32;
 pub type Date=chrono::DateTime<chrono::UTC>;
 pub type ThreadID=Uuid;
+pub type PostID=Uuid;
 
 use chrono;
 use uuid::Uuid;

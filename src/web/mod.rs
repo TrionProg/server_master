@@ -90,6 +90,13 @@ impl WebInterface {
             status::Ok,
             WebInterface::send_image(r,&router_webInterface),
         ))), "image" );
+
+        let router_webInterface=webInterface.clone();
+        router.get("/user", move |r: &mut Request| Ok(Response::with((
+            router_webInterface.mimeTypes.html.clone(),
+            status::Ok,
+            WebInterface::show_user(r,&router_webInterface),
+        ))), "user" );
         /*
         let router_webInterface=webInterface.clone();
         router.get("/login", move |r: &mut Request| Ok(Response::with((router_webInterface.mimeTypes.text.clone(),
@@ -298,6 +305,119 @@ impl WebInterface {
         out.push_str("</table></BODY></HTML>");
         out
     }
+
+    pub fn show_user(req: &mut Request, wi:&Arc< WebInterface >) -> String {
+        use urlencoded::UrlEncodedQuery;
+
+        let url_args=match req.get_ref::<UrlEncodedQuery>() {
+            Ok(url_args) => url_args,
+            Err(e) => return "url error".to_string(),
+        };
+
+        let id=match url_args.get("id"){
+            Some( cat_str ) => cat_str[0].parse::<i32>().unwrap(),
+            None => return "no id".to_string(),
+        };
+
+        let short_user_info=match wi.users.lock().unwrap().get_short_user_information_by_id(id){
+            Ok(found_short_user_info) => match found_short_user_info {
+                Some(short_user_info) => short_user_info,
+                None => return format!("No user {}",id),
+            },
+            Err(e) => return format!("Get user Error:{}",e),
+        };
+
+        let full_user_info=match wi.users.lock().unwrap().get_full_user_information_by_id(id) {
+            Ok(found_full_user_info) => match found_full_user_info {
+                Some(full_user_info) => full_user_info,
+                None => return format!("No user {}",id),
+            },
+            Err(e) => return format!("Get user Error:{}",e),
+        };
+
+        let avatar=match full_user_info.get_avatar(){
+            Ok(a) => a,
+            Err(e) => return format!("{}",e),
+        };
+        let awards=match full_user_info.get_awards(){
+            Ok(a) => a,
+            Err(e) => return format!("{}",e),
+        };
+
+        let threads=match full_user_info.get_threads(){
+            Ok(t) => t,
+            Err(e) => return format!("{}",e),
+        };
+
+
+        let mut out=String::with_capacity(8*1024);
+        out.push_str("<!DOCTYPE HTML><HTML lang=\"en\"><HEAD><meta charset='utf-8'></HEAD><BODY>");
+
+        let main_info=format!("
+        Name:{}<br>
+        <img src=\"/image?id={}\" alt=\"{}\"><br>
+        Rating:{}<br>
+        ID:{}<br>",
+            short_user_info.login,
+            avatar,short_user_info.login,
+            short_user_info.rating,
+            id
+        );
+
+        out.push_str(main_info.as_str());
+        out.push_str("Awards<br><table  cellpadding=\"10\" border=\"1\" width=\"800px\">");
+
+        for award in awards {
+            let award_html=format!("
+            <tr>
+                <td><img src=\"/image?id={}\" alt=\"{}\"></td>
+                <td>
+                    <a href=\"/award?id={}\">{}</a><br>
+                    {}
+                </td>
+            </tr>",
+                award.icon, award.name,
+                award.id, award.name,
+                award.description
+            );
+
+            out.push_str(award_html.as_str());
+        }
+
+        out.push_str("</table><br>Threads<br><table  cellpadding=\"10\" border=\"1\" width=\"800px\">");
+
+        for thread_id in threads {
+            let thread=match wi.forum.lock().unwrap().get_thread_by_id(thread_id){
+                Ok(found_thread) => match found_thread {
+                    Some(thread) => thread,
+                    None => return format!("No thread {}",thread_id),
+                },
+                Err(e) => return format!("Get thread Error:{}",e),
+            };
+
+            let thread_html=format!("
+            <tr>
+                <td><img src=\"/image?id={}\" alt=\"{}\"></td>
+                <td><a href=\"/user?id={}\">{}</a></td>
+                <td><a href=\"/thread?id={}\">{}</a></td>
+            </tr>",
+                short_user_info.avatar,short_user_info.login,
+                thread.author,short_user_info.login,
+                thread.id,thread.caption
+            );
+            out.push_str(&thread_html);
+        }
+
+        out.push_str("</table>");
+
+        out
+    }
+
+
+
+
+
+
 
     pub fn close(&self){
         println!("[INFO]Closing web interface");

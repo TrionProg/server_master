@@ -11,7 +11,7 @@ use bson;
 use uuid::Uuid;
 
 use super::Error;
-use super::{BinaryData,ServerID,UserID};
+use super::{BinaryData,ServerID,UserID,ImageID,ThreadID};
 use super::{RedisClient,MongoDatabase};
 use super::{RedisCollection,MongoCollection,CassandraSession,PostgresSession};
 
@@ -261,7 +261,7 @@ impl Users {
 
         let doc=self.mongo_users.find_one(Some(find_filter),Some(find_option))?;
 
-        println!("{:?}",doc);
+        //println!("{:?}",doc);
 
         match doc {
             Some( doc ) => {
@@ -312,42 +312,47 @@ impl Users {
         }
     }
 
-    //modify award (chande icon and description
-
-
-    pub fn smt(&self) -> Result<(),Error> {
-        #[derive(Serialize, Deserialize, Debug)]
-        pub struct Person {
-            #[serde(rename = "_id")]  // Use MongoDB's special primary key field name when serializing
-            pub id: String,
-            pub name: String,
-            pub age: usize
-        }
-
-        let person = Person {
-            id: "12345".to_string(),
-            name: "Emma".to_string(),
-            age: 3,
+    pub fn add_thread(&self, user_id:UserID, thread:ThreadID) -> Result<(),Error> {
+        let find_filter=doc! {
+            "_id" => user_id
         };
 
-        let serialized_person = bson::to_bson(&person)?;  // Serialize
+        let thread_s=thread.to_string();
 
-        match serialized_person {
-            Bson::Document(ref doc) =>
-                println!("{:?}",doc),
-            _ => {},
-        }
+        let update_doc=doc! {
+            "$push" => { "threads" => thread_s }
+        };
 
-        // Deserialize the document into a Person instance
-        //match serialized_person {
-        //    Bson::Document(ref d) => {
-                let person2:Person = bson::from_bson(serialized_person).unwrap();
-        //    },
-        //    _ => {},
-        //}
+        self.mongo_users.find_one_and_update( find_filter ,update_doc, None );//TODO:None
 
         Ok(())
     }
+
+    pub fn get_user_ids(&self) -> Result<Vec<UserID>,Error> {
+        let result_rows=self.postgres_session.query(
+            "SELECT id FROM users",
+            &[]
+        )?;
+
+        let mut user_ids=Vec::with_capacity(128);
+
+        for row in &result_rows {
+            let user_id=row.get(0);
+            user_ids.push(user_id);
+        }
+
+        Ok(user_ids)
+    }
+
+    pub fn clear(&mut self) -> Result<(),Error>{
+        self.postgres_session.execute("DELETE FROM users",&[])?;
+        self.mongo_users.drop()?;
+
+        Ok(())
+    }
+
+    //modify award (chande icon and description
+
 }
 
 impl FullUserInformation {
@@ -375,4 +380,39 @@ impl FullUserInformation {
             _ => Err(Error::Other( format!("Awards of user \"{}\" must be array",self.user_id) )),
         }
     }
+
+    pub fn get_avatar(&self) -> Result<ImageID,Error> {
+        match self.doc.get("avatar") {
+            Some(&Bson::String(ref avatar_s)) => {
+                let avatar=Uuid::parse_str(avatar_s.as_str())?;
+                Ok(avatar)
+            },
+            _ => Err(Error::Other( format!("Avatar of user \"{}\" must be string",self.user_id) )),
+        }
+    }
+
+    pub fn get_threads(&self) -> Result<Vec<ThreadID>,Error> {
+        match self.doc.get("threads") {
+            Some(&Bson::Array(ref mongo_threads)) => {
+                if mongo_threads.len()==0 {
+                    return Ok(Vec::new());
+                }
+
+                let mut threads=Vec::with_capacity(mongo_threads.len());
+                for mongo_thread in mongo_threads.iter() {
+                    match *mongo_thread {
+                        Bson::String( ref thread_id_s ) => {
+                            let thread_id=Uuid::parse_str(thread_id_s.as_str())?;
+                            threads.push(thread_id);
+                        },
+                        _ => return Err(Error::Other( format!("Thread of user \"{}\" must be string",self.user_id) )),
+                    }
+                }
+
+                Ok( threads )
+            },
+            _ => Err(Error::Other( format!("Threads of user \"{}\" must be array",self.user_id) )),
+        }
+    }
+
 }

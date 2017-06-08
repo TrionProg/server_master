@@ -7,6 +7,7 @@ use cdrs;
 use postgres;
 use mongodb;
 use bson;
+use uuid;
 
 pub enum Error{
     IOError(Box<std::io::Error>),
@@ -19,6 +20,7 @@ pub enum Error{
     MongoDBError(Box<mongodb::error::Error>),
     BsonIncodeError(Box<bson::EncoderError>),
     BsonDecodeError(Box<bson::DecoderError>),
+    UuidParseError(Box<uuid::ParseError>),
     Other(String),
 }
 
@@ -76,6 +78,12 @@ impl From<bson::DecoderError> for Error {
     }
 }
 
+impl From<uuid::ParseError> for Error {
+    fn from(uuid_parse_error:uuid::ParseError) -> Self{
+        Error::UuidParseError( Box::new(uuid_parse_error) )
+    }
+}
+
 impl std::fmt::Display for Error{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self{
@@ -89,6 +97,7 @@ impl std::fmt::Display for Error{
             Error::MongoDBError(ref mongodb_error) => write!(f, "MongoDB error: \"{}\"",mongodb_error),
             Error::BsonIncodeError(ref bson_incode_error) => write!(f, "BSON Encode Error: \"{}\"",bson_incode_error),
             Error::BsonDecodeError(ref bson_decode_error) => write!(f, "BSON Decode Error: \"{}\"",bson_decode_error),
+            Error::UuidParseError(ref uuid_parse_error) => write!(f, "UUID parse Error: \"{}\"",uuid_parse_error),
             Error::Other(ref msg) => write!(f, "{}",msg),
         }
     }

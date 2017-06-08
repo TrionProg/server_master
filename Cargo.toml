@@ -15,6 +15,7 @@ byteorder = "1.0.0"
 iron = "*"
 router = "*"
 urlencoded = "*"
+rand = "0.3"
 
 [dependencies.uuid]
 version = "0.5.0"

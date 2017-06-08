@@ -188,7 +188,7 @@ impl Forum {
         }
     }
 
-    pub fn create_thread(&mut self, author:UserID, category:Category, caption:String, message:String) -> Result<ThreadID,Error> {
+    pub fn create_thread(&mut self, users:&Users, author:UserID, category:Category, caption:String, message:String) -> Result<ThreadID,Error> {
         let date=UTC::now();
 
         loop{
@@ -201,6 +201,7 @@ impl Forum {
 
             if insert_result==1 {
                 self.add_post(id,author,date,message)?;
+                users.add_thread(author, id)?;
                 return Ok(id);
             }
         }
@@ -238,12 +239,34 @@ impl Forum {
                 message,
             };
 
-            let data:BinaryData=bincode::serialize(&post,bincode::Bounded(1024))?;
+            let data:BinaryData=bincode::serialize(&post,bincode::Bounded(4024))?;
             self.redis_posts.set_ex(id.to_string(), data, POST_EXPIRATION)?;
 
             Ok( Some(post) )
         }else{
             Ok( None )
+        }
+    }
+
+    pub fn get_thread_by_id(&self,id:ThreadID) -> Result<Option<Thread>,Error> {
+        let result_rows=self.postgres_session.query(
+            "SELECT author, caption, category FROM threads WHERE id=$1",
+            &[&id]
+        )?;
+
+        if result_rows.len()>0 {
+            let row=result_rows.iter().next().unwrap();
+
+            let thread = Thread {
+                id: id,
+                author: row.get(0),
+                caption: row.get(1),
+                category: row.get(2)
+            };
+
+            Ok(Some(thread))
+        }else{
+            Ok(None)
         }
     }
 
@@ -299,5 +322,17 @@ impl Forum {
         }
 
         Ok(post_ids)
+    }
+
+    pub fn clear(&mut self) -> Result<(),Error> {
+        use cdrs::query::Query;
+
+        self.postgres_session.execute("DELETE FROM threads",&[])?;
+        self.postgres_session.execute("DELETE FROM posts",&[])?;
+
+        let delete_query = CassandraQuery::new("TRUNCATE posts").finalize();
+        self.cassandra_session.query(delete_query, true, true)?;
+
+        Ok(())
     }
 }

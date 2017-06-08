@@ -18,6 +18,7 @@ extern crate bson;
 extern crate iron;
 extern crate router;
 extern crate urlencoded;
+extern crate rand;
 
 mod db;
 mod web;
@@ -45,6 +46,13 @@ fn process() -> Result<(),db::Error> {
     let mut users=db::Users::new(&redis_users_client, &redis_global_client, &mondo_users_db)?;
     let mut images=db::Images::new(&redis_images_client)?;
     let mut forum=db::Forum::new(&redis_global_client, &redis_posts_client, &mondo_users_db)?;
+
+    match db::fill(&mut global, &mut users, &mut images, &mut forum){
+        Ok(_) => {},
+        Err(e) => println!("{}",e),
+    }
+
+    //let a=forum.create_thread(&users, 14, 0, "Hello guys".to_string(), "i habe problemz".to_string())?;
 
     let web_interface=match web::WebInterface::run(global,users,images,forum) {
         Ok(wi) => wi,

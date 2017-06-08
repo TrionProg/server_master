@@ -32,6 +32,7 @@ pub type ThreadID=Uuid;
 pub type PostID=Uuid;
 pub type Category=i32;
 pub type ImageID=Uuid;
+pub type AwardID=i32;
 
 use chrono;
 use uuid::Uuid;

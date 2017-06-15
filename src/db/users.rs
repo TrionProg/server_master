@@ -198,8 +198,15 @@ impl Users {
             None => {},
         }
 
+        /*
         let result_rows=self.postgres_session.query(
-            "SELECT login,avatar,rating FROM users WHERE id=$1",
+            "SELECT * FROM get_short_user_information($1) AS (login character(32), avatar uuid, rating real)",
+            &[&user_id]
+        )?;
+        */
+
+        let result_rows=self.postgres_session.query(
+            "SELECT * FROM get_short_user_information($1)",
             &[&user_id]
         )?;
 

@@ -44,7 +44,7 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
     const USERS_COUNT:usize = 10;
     const CATEGORIES_COUNT:usize = 10;
     const THREADS_COUNT:usize = 10;
-    const POSTS_COUNT:usize = 10;
+    const POSTS_COUNT:usize = 100;
 
     let mut rng = rand::thread_rng();
     /*
@@ -68,7 +68,9 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
     */
 
     let user_ids=users.get_user_ids()?;
+
     /*
+
     println!("Clearing forum");
     forum.clear()?;
     println!("Generating forum");

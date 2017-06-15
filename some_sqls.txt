@@ -1,0 +1,98 @@
+CREATE TABLE awards (id serial primary key, name char(64) NOT NULL, icon uuid NOT NULL);
+GRANT SELECT, UPDATE, INSERT, DELETE ON awards TO postgresql_user;
+CREATE TABLE images (
+    id uuid PRIMARY KEY,
+    author integer NOT NULL,
+    date timestamp NOT NULL,
+    data bytea NOT NULL
+);
+GRANT SELECT, UPDATE, INSERT, DELETE ON images TO postgresql_user;
+/*
+CREATE TABLE threads (
+    id uuid PRIMARY KEY,
+    author integer NOT NULL,
+    category integer NOT NULL,
+    caption text NOT NULL,
+    first_post uuid NOT NULL,
+    last_post uuid NOT NULL,
+    first_post_date timestamp NOT NULL,
+    last_post_date timestamp NOT NULL
+);
+GRANT SELECT, UPDATE, INSERT, DELETE ON threads TO postgresql_user;
+*/
+CREATE TABLE threads (
+    id uuid PRIMARY KEY,
+    author integer NOT NULL,
+    category integer NOT NULL,
+    caption text NOT NULL
+);
+GRANT SELECT, UPDATE, INSERT, DELETE ON threads TO postgresql_user;
+
+CREATE TABLE posts (
+    id uuid PRIMARY KEY,
+    thread_id uuid NOT NULL,
+    author integer NOT NULL,
+    date timestamp NOT NULL
+);
+GRANT SELECT, UPDATE, INSERT, DELETE ON posts TO postgresql_user;
+
+
+CREATE FUNCTION get_posts_of_thread (uuid)
+    RETURNS SETOF uuid AS
+'
+    SELECT id FROM posts WHERE thread_id=$1;
+'
+LANGUAGE sql STABLE;
+
+    ``````````
+    CREATE TYPE ShortUserInformation AS (login character(32), avatar uuid, rating real);
+
+    CREATE FUNCTION get_short_user_information (integer)
+        RETURNS ShortUserInformation AS
+    '
+        SELECT login,avatar,rating FROM users WHERE id=$1;
+    '
+    LANGUAGE sql STABLE;
+    ``````````
+/*
+CREATE FUNCTION get_short_user_information (integer)
+    RETURNS TABLE(login character(32), avatar uuid, rating real) AS
+'
+    SELECT login,avatar,rating FROM users WHERE id=$1;
+'
+LANGUAGE sql STABLE;
+
+CREATE FUNCTION get_short_user_information (integer)
+    RETURNS RECORD AS
+'
+    SELECT login,avatar,rating FROM users WHERE id=$1;
+'
+LANGUAGE sql STABLE;
+*/
+
+cqlsh
+CREATE KEYSPACE master_server
+  WITH REPLICATION = {
+   'class' : 'SimpleStrategy',
+   'replication_factor' : 1
+  };
+USE master_server;
+/*
+CREATE TABLE posts (
+    id uuid primary key,
+    author int,
+    date timestamp,
+    last_edit timestamp,
+    message text,
+    previous uuid,
+    next uuid
+);
+*/
+CREATE TABLE posts (
+    id uuid primary key,
+    thread_id uuid,
+    author int,
+    date timestamp,
+    last_edit timestamp,
+    message text,
+);

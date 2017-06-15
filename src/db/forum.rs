@@ -209,6 +209,7 @@ impl Forum {
 
     pub fn get_post(&mut self, id:PostID) -> Result<Option<Post>,Error> {
         use cdrs::types::ByName;
+
         let data:Option<BinaryData> = self.redis_posts.get(id.to_string())?;
 
         match data {
@@ -218,6 +219,8 @@ impl Forum {
             },
             None => {},
         }
+
+
 
         let execution_params = CassandraParams::new(CassandraConsistency::One)
             .values(vec![Self::uuid_to_value(&id)])
@@ -294,7 +297,7 @@ impl Forum {
 
     pub fn get_all_post_ids_for_thread(&mut self, thread:ThreadID) -> Result<Vec<PostID>,Error> {
         let result_rows=self.postgres_session.query(
-            "SELECT id FROM posts WHERE thread_id=$1",
+            "SELECT get_posts_of_thread($1)",
             &[&thread]
         )?;
 

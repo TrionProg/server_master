@@ -67,7 +67,7 @@ impl WebInterface {
         router.get("/", move |r: &mut Request| Ok(Response::with((
             router_webInterface.mimeTypes.html.clone(),
             status::Ok,
-            format!("hahah"),
+            format!("<!DOCTYPE HTML><HTML lang=\"en\"><HEAD><meta charset='utf-8'></HEAD><BODY>Caching</BODY></HTML>"),
         ))), "index" );
 
         let router_webInterface=webInterface.clone();

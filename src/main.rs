@@ -63,7 +63,7 @@ fn process() -> Result<(),db::Error> {
 
     std::io::stdin().read_line(&mut input);
 
-    web_interface.close();
+    //web_interface.close();
 
     /*
 

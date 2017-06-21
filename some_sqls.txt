@@ -36,6 +36,9 @@ CREATE TABLE posts (
 );
 GRANT SELECT, UPDATE, INSERT, DELETE ON posts TO postgresql_user;
 
+//count
+select count(id) from (select id from users) as sub;
+
 
 CREATE FUNCTION get_posts_of_thread (uuid)
     RETURNS SETOF uuid AS
@@ -96,3 +99,16 @@ CREATE TABLE posts (
     last_edit timestamp,
     message text,
 );
+
+Neo4j
+create (n:User {id: 2});
+MATCH (a {id: 1}),
+      (b {id: 2})
+MERGE (a)-[r:fiendship]->(b);
+
+MATCH (n)-[rel:friendship]->(r) WHERE n.id={user1_id} AND r.id={user2_id} DELETE rel;
+MATCH (n) RETURN n;
+
+//get friends
+MATCH (:User {id:2091})-[r]-()
+RETURN r

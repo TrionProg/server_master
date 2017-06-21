@@ -41,8 +41,10 @@ use redis;
 use mongodb;
 use cdrs;
 use postgres;
+use rusted_cypher;
 
 pub type RedisCollection=redis::Connection;
 pub type MongoCollection=mongodb::coll::Collection;
 pub type CassandraSession=cdrs::client::Session<cdrs::authenticators::NoneAuthenticator, cdrs::transport::TransportTcp>;
 pub type PostgresSession=postgres::Connection;
+pub type Neo4jSession=rusted_cypher::GraphClient;

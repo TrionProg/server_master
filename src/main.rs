@@ -19,6 +19,7 @@ extern crate iron;
 extern crate router;
 extern crate urlencoded;
 extern crate rand;
+extern crate rusted_cypher;
 
 mod db;
 mod web;

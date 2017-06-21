@@ -49,7 +49,8 @@ pub struct Forum {
     cassandra_session:CassandraSession,
     cassandra_create_post_query:BodyResResultPrepared,
     cassandra_get_post_query:BodyResResultPrepared,
-    //mongo_users:MongoCollection,
+    cassandra_delete_post_query:BodyResResultPrepared,
+    cassandra_update_post_query:BodyResResultPrepared
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -83,6 +84,8 @@ impl Forum {
         let mut cassandra_session = Self::connect_to_cassandra()?;
         let cassandra_create_post_query=Self::prepare_cassandra_create_post_query(&mut cassandra_session)?;
         let cassandra_get_post_query=Self::prepare_cassandra_get_post_query(&mut cassandra_session)?;
+        let cassandra_delete_post_query=Self::prepare_cassandra_delete_post_query(&mut cassandra_session)?;
+        let cassandra_update_post_query=Self::prepare_cassandra_update_post_query(&mut cassandra_session)?;
         let postgres_session = Self::connect_to_postgres()?;
         //let mongo_users = mongo_db.get_collection("users");
 
@@ -95,6 +98,8 @@ impl Forum {
             cassandra_session,
             cassandra_create_post_query,
             cassandra_get_post_query,
+            cassandra_delete_post_query,
+            cassandra_update_post_query,
         };
 
         Ok( forum )
@@ -146,6 +151,24 @@ impl Forum {
         Ok( get_post_query_prepared )
     }
 
+    fn prepare_cassandra_delete_post_query(cassandra_session:&mut CassandraSession) -> Result<BodyResResultPrepared,Error> {
+        let delete_post_cql = "DELETE FROM posts WHERE id=?";
+
+        let delete_post_query_prepared = cassandra_session.prepare(delete_post_cql.to_string(), true, true)?.
+            get_body()?.into_prepared().unwrap();
+
+        Ok( delete_post_query_prepared )
+    }
+
+    fn prepare_cassandra_update_post_query(cassandra_session:&mut CassandraSession) -> Result<BodyResResultPrepared,Error> {
+		let update_post_cql = "UPDATE posts SET message=$1, date=$2 WHERE id=$3";
+
+		let update_post_query_prepared = cassandra_session.prepare(update_post_cql.to_string(), true, true)?.
+			get_body()?.into_prepared().unwrap();
+
+		Ok( update_post_query_prepared )
+	}
+
     fn uuid_to_value(id:&Uuid) -> Value {
         Value::new_normal(cdrs::types::value::Bytes::new( Vec::from(&id.as_bytes()[..]) ))
     }
@@ -185,25 +208,6 @@ impl Forum {
             return Ok( id );
         }else{
             return Err(Error::Other("Can not add post".to_string()));
-        }
-    }
-
-    pub fn create_thread(&mut self, users:&Users, author:UserID, category:Category, caption:String, message:String) -> Result<ThreadID,Error> {
-        let date=UTC::now();
-
-        loop{
-            let id=Uuid::new(UuidVersion::Random).unwrap();
-
-            let insert_result=self.postgres_session.execute(
-                "INSERT INTO threads (id, author, category, caption) VALUES($1, $2, $3, $4)",
-                &[&id,&author,&category,&caption]
-            )?;
-
-            if insert_result==1 {
-                self.add_post(id,author,date,message)?;
-                users.add_thread(author, id)?;
-                return Ok(id);
-            }
         }
     }
 
@@ -248,6 +252,64 @@ impl Forum {
             Ok( Some(post) )
         }else{
             Ok( None )
+        }
+    }
+
+    pub fn update_post(&mut self, id:PostID, message:String) -> Result<(),Error> {
+		let values: Vec<Value> = vec![
+            message.into(),
+            Self::date_to_value(&UTC::now()),
+            Self::uuid_to_value(&id),
+		];
+
+		let execution_params = CassandraParams::new(CassandraConsistency::One)
+			.values(values)
+			.finalize();
+
+		let executed = self.cassandra_session.execute(&self.cassandra_update_post_query.id, execution_params, false, false)?.get_body()?;
+
+		Ok(())
+	}
+
+    pub fn delete_post(&mut self, id:PostID) -> Result<(),Error> {
+		let values: Vec<Value> = vec![
+			Self::uuid_to_value(&id),
+		];
+
+		let execution_params = CassandraParams::new(CassandraConsistency::One)
+			.values(values)
+			.finalize();
+
+		let executed = self.cassandra_session.execute(&self.cassandra_delete_post_query.id, execution_params, false, false)?.get_body()?;
+
+		let delete_result=self.postgres_session.execute(
+			"DELETE FROM posts WHERE id = $1",
+			&[&id]
+		)?;
+
+		if delete_result==1 {
+			Ok( () )
+		}else{
+			Err(Error::Other("Can not delete post".to_string()))
+		}
+	}
+
+    pub fn create_thread(&mut self, users:&Users, author:UserID, category:Category, caption:String, message:String) -> Result<ThreadID,Error> {
+        let date=UTC::now();
+
+        loop{
+            let id=Uuid::new(UuidVersion::Random).unwrap();
+
+            let insert_result=self.postgres_session.execute(
+                "INSERT INTO threads (id, author, category, caption) VALUES($1, $2, $3, $4)",
+                &[&id,&author,&category,&caption]
+            )?;
+
+            if insert_result==1 {
+                self.add_post(id,author,date,message)?;
+                users.add_thread(author, id)?;
+                return Ok(id);
+            }
         }
     }
 
@@ -326,6 +388,23 @@ impl Forum {
 
         Ok(post_ids)
     }
+
+    pub fn delete_thread(&mut self, users:&Users, id:ThreadID ) -> Result<(),Error> {
+		for post_id in self.get_all_post_ids_for_thread(id)?.iter() { //NOTE
+			self.delete_post(*post_id)?;
+        }
+
+		let delete_result=self.postgres_session.execute(
+			"DELETE FROM threads WHERE id = $1",
+			&[&id]
+		)?;
+
+        if delete_result==1 {
+			Ok(())
+		}else{
+			Err(Error::Other("Can not delete thread".to_string()))
+		}
+	}
 
     pub fn clear(&mut self) -> Result<(),Error> {
         use cdrs::query::Query;

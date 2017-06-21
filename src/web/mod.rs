@@ -408,7 +408,36 @@ impl WebInterface {
             out.push_str(&thread_html);
         }
 
-        out.push_str("</table>");
+        out.push_str("</table><br>friends<br><table  cellpadding=\"10\" border=\"1\" width=\"800px\">");
+
+        let friends=match wi.users.lock().unwrap().get_friends(id){
+            Ok(f) => f,
+            Err(e) => return format!("{}",e),
+        };
+
+        for friend_id in friends.iter() {
+            let short_user_info=match wi.users.lock().unwrap().get_short_user_information_by_id(*friend_id){
+                Ok(found_short_user_info) => match found_short_user_info {
+                    Some(short_user_info) => short_user_info,
+                    None => return format!("No user {}",friend_id),
+                },
+                Err(e) => return format!("Get user Error:{}",e),
+            };
+
+            let friend_html=format!("
+            <tr>
+                <td><img src=\"/image?id={}\" alt=\"{}\"></td>
+                <td><a href=\"/user?id={}\">{}</a><br>Rating:{}</td>
+            </tr>",
+                short_user_info.avatar, short_user_info.login,
+                friend_id, short_user_info.login, short_user_info.rating
+            );
+
+            out.push_str(&friend_html);
+        }
+
+
+        out.push_str("</table></BODY></HTML>");
 
         out
     }

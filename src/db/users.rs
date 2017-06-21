@@ -4,6 +4,7 @@ use redis;
 use cdrs;
 use postgres;
 use mongodb;
+use rusted_cypher;
 
 
 use bson;
@@ -13,7 +14,7 @@ use uuid::Uuid;
 use super::Error;
 use super::{BinaryData,ServerID,UserID,ImageID,ThreadID};
 use super::{RedisClient,MongoDatabase};
-use super::{RedisCollection,MongoCollection,CassandraSession,PostgresSession};
+use super::{RedisCollection,MongoCollection,CassandraSession,PostgresSession,Neo4jSession};
 
 use postgres::types::ToSql;
 use redis::Commands;
@@ -35,6 +36,7 @@ pub struct Users{
     redis_global:RedisCollection,
     postgres_session:PostgresSession,
     mongo_users:MongoCollection,
+    neo4j_users:Neo4jSession,
 }
 
 pub enum AddUserResult{
@@ -69,6 +71,7 @@ impl Users {
         //let cassandra_session = Self::connect_to_cassandra()?;
         let postgres_session = Self::connect_to_postgres()?;
         let mongo_users = mongo_db.get_collection("users");
+        let neo4j_users = Self::connect_to_neo4j()?;
 
         let users=Users{
             redis_users,
@@ -76,6 +79,7 @@ impl Users {
             //cassandra_session,
             postgres_session,
             mongo_users,
+            neo4j_users,
         };
 
         Ok( users )
@@ -106,6 +110,13 @@ impl Users {
         let postgres_session = PostgresSession::connect("postgresql://postgresql_user:user@localhost/users",tls_mode)?;
 
         Ok( postgres_session )
+    }
+
+    fn connect_to_neo4j() -> Result<Neo4jSession,Error> {
+        use rusted_cypher::GraphClient;
+        let neo4j_session = GraphClient::connect("http://neo4j:trionix@localhost:7474/db/data")?;
+
+        Ok( neo4j_session )
     }
 
 
@@ -149,6 +160,8 @@ impl Users {
             None => return Ok(AddUserResult::UserExists),
         };
 
+        //add user to mongo
+
         let default_avatar_big_s=default_avatar_big.to_string();
 
         let doc = doc! {
@@ -168,6 +181,13 @@ impl Users {
         };
 
         self.mongo_users.insert_one(doc, Some(concern))?;
+
+        //add user to neo4j
+        let mut query = self.neo4j_users.query();
+        let statement = rusted_cypher::Statement::new("CREATE (n:User { id: {user_id} })").with_param("user_id", user_id).unwrap();//TODO unwrap
+        query.add_statement(statement);
+
+        query.send()?;
 
         Ok( AddUserResult::Success(user_id) )
     }
@@ -224,7 +244,7 @@ impl Users {
                 online_status
             };
 
-            let data:BinaryData=bincode::serialize(&user,bincode::Bounded(96))?;
+            let data:BinaryData=bincode::serialize(&user,bincode::Bounded(256))?;
             self.redis_users.set_ex(user_id, data, USER_EXPIRATION)?;
 
             Ok( Some(user) )
@@ -351,9 +371,62 @@ impl Users {
         Ok(user_ids)
     }
 
+    pub fn add_friendship(&self, user1_id:UserID, user2_id:UserID) -> Result<(),Error> {
+        let mut query = self.neo4j_users.query();
+        let mut statement = rusted_cypher::Statement::new("MATCH (a {id: {user1_id}}),(b {id: {user2_id}})MERGE (a)-[r:friendship]->(b);");
+        statement.add_param("user1_id", user1_id).unwrap();//TODO unwrap
+        statement.add_param("user2_id", user2_id).unwrap();//TODO unwrap
+        query.add_statement(statement);
+
+
+        let mut statement = rusted_cypher::Statement::new("MATCH (a {id: {user1_id}}),(b {id: {user2_id}})MERGE (a)-[r:friendship]->(b);");
+        statement.add_param("user1_id", user2_id).unwrap();//TODO unwrap
+        statement.add_param("user2_id", user1_id).unwrap();//TODO unwrap
+        query.add_statement(statement);
+
+        query.send()?;
+        Ok(())
+    }
+
+    pub fn remove_friendship(&self, user1_id:UserID, user2_id:UserID) -> Result<(),Error> {
+        let mut query = self.neo4j_users.query();
+        let mut statement = rusted_cypher::Statement::new("MATCH (n)-[rel:friendship]->(r) WHERE n.id={user1_id} AND r.id={user2_id} DELETE rel;");
+        statement.add_param("user1_id", user1_id).unwrap();//TODO unwrap
+        statement.add_param("user2_id", user2_id).unwrap();//TODO unwrap
+        query.add_statement(statement);
+
+        let mut statement = rusted_cypher::Statement::new("MATCH (n)-[rel:friendship]->(r) WHERE n.id={user1_id} AND r.id={user2_id} DELETE rel;");
+        statement.add_param("user1_id", user2_id).unwrap();//TODO unwrap
+        statement.add_param("user2_id", user1_id).unwrap();//TODO unwrap
+        query.add_statement(statement);
+
+        query.send()?;
+        Ok(())
+    }
+
+    pub fn get_friends(&self, user_id:UserID) -> Result<Vec<UserID>,Error> {
+        let mut statement = rusted_cypher::Statement::new("MATCH (a:User {id:{user_id}})-[r]->(b) RETURN b.id");
+        statement.add_param("user_id", user_id).unwrap();//TODO unwrap
+
+        let result=self.neo4j_users.exec(statement)?;
+
+        let mut friends=Vec::new();
+        for row in result.rows() {
+            let friend_id:UserID=row.get("b.id")?;
+            friends.push(friend_id);
+        }
+
+        Ok(friends)
+    }
+
     pub fn clear(&mut self) -> Result<(),Error>{
         self.postgres_session.execute("DELETE FROM users",&[])?;
         self.mongo_users.drop()?;
+
+        let mut query = self.neo4j_users.query();
+        let mut statement = rusted_cypher::Statement::new("MATCH (n)  WITH n limit 1000000 DETACH DELETE n; ");
+        query.add_statement(statement);
+        query.send()?;
 
         Ok(())
     }

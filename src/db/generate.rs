@@ -8,7 +8,7 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
     use std::fs::File;
     use std::io::BufReader;
     use std::io::prelude::*;
-
+    /*
     println!("reading zaratustra");
 
     let file = File::open("zaratustra.txt").unwrap();
@@ -39,44 +39,63 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
             names.push(word);
         }
     }
+    */
 
 
-    const USERS_COUNT:usize = 10;
-    const CATEGORIES_COUNT:usize = 10;
-    const THREADS_COUNT:usize = 10;
+
+    const USERS_COUNT:usize = 1000_0;
+    const CATEGORIES_COUNT:usize = 10_0;
+    const THREADS_COUNT:usize = 10_0;
     const POSTS_COUNT:usize = 100;
+    const FRIENDSHIPS_COUNT:usize = 1000_0;
+    const GIVE_AWARDS_COUNT:usize = 1000_0;
 
     let mut rng = rand::thread_rng();
-    /*
+/*
     println!("Clearing users");
-    users.clear()?;
+    //users.clear()?;
     println!("Generating users");
 
     for i in 0..USERS_COUNT {
+        if i%100==0 {
+            println!("{}",i);
+        }
+
         loop {
-            let name=names[Range::new(0,names.len()-1).ind_sample(&mut rng)];
+            let name=format!("{}{}",names[Range::new(0,names.len()-1).ind_sample(&mut rng)], words[Range::new(0,words.len()-1).ind_sample(&mut rng)]);
             let password=words[Range::new(0,words.len()-1).ind_sample(&mut rng)];
 
-            let user_id=match users.add_user(name,password)? {
+            let user_id=match users.add_user(name.as_str(),password)? {
                 db::AddUserResult::Success(id) => id,
-                db::AddUserResult::UserExists => continue,
+                db::AddUserResult::UserExists => {println!("User {} exists",name); continue},
             };
 
             break;
         }
     }
-    */
 
     let user_ids=users.get_user_ids()?;
 
-    /*
+    println!("Generating friendships");
+    for i in 0..FRIENDSHIPS_COUNT {
+        let user1 = user_ids[Range::new(0,user_ids.len()-1).ind_sample(&mut rng)];
+        let user2 = user_ids[Range::new(0,user_ids.len()-1).ind_sample(&mut rng)];
+
+        if user1!=user2 {
+            users.add_friendship(user1, user2)?;
+        }
+
+        if i%100==0 {
+            println!("{}",i);
+        }
+    }
 
     println!("Clearing forum");
     forum.clear()?;
     println!("Generating forum");
 
     for category in 0..CATEGORIES_COUNT {
-        for _ in 0..THREADS_COUNT {
+        for i in 0..THREADS_COUNT {
             let author = user_ids[Range::new(0,user_ids.len()-1).ind_sample(&mut rng)];
             let thread_caption=gen_text(&words, 6);
             let first_post_message=gen_text(&words, Range::new(50,200).ind_sample(&mut rng));
@@ -88,8 +107,27 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
                 let message=gen_text(&words, Range::new(50,200).ind_sample(&mut rng));
                 forum.add_post(forum_id, author, UTC::now(), message)?;
             }
+
+            if i%100==0 {
+                println!("{}",i);
+            }
         }
     }
+    */
+    /*
+    let user_ids=users.get_user_ids()?;
+
+    println!("Giving awards");
+    for i in 0..GIVE_AWARDS_COUNT {
+        let user = user_ids[Range::new(0,user_ids.len()-1).ind_sample(&mut rng)];
+        let message=gen_text(&words, Range::new(50,150).ind_sample(&mut rng));
+        users.give_award(user,"Held des Vaterland",message)?;
+
+        if i%100==0 {
+            println!("{}",i);
+        }
+    }
+    println!("OK");
     */
 
     Ok(())

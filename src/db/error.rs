@@ -8,6 +8,7 @@ use postgres;
 use mongodb;
 use bson;
 use uuid;
+use rusted_cypher;
 
 pub enum Error{
     IOError(Box<std::io::Error>),
@@ -21,6 +22,7 @@ pub enum Error{
     BsonIncodeError(Box<bson::EncoderError>),
     BsonDecodeError(Box<bson::DecoderError>),
     UuidParseError(Box<uuid::ParseError>),
+    Neo4jError(Box<rusted_cypher::GraphError>),
     Other(String),
 }
 
@@ -84,6 +86,12 @@ impl From<uuid::ParseError> for Error {
     }
 }
 
+impl From<rusted_cypher::GraphError> for Error {
+    fn from(neo4j_error:rusted_cypher::GraphError) -> Self{
+        Error::Neo4jError( Box::new(neo4j_error) )
+    }
+}
+
 impl std::fmt::Display for Error{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self{
@@ -98,6 +106,22 @@ impl std::fmt::Display for Error{
             Error::BsonIncodeError(ref bson_incode_error) => write!(f, "BSON Encode Error: \"{}\"",bson_incode_error),
             Error::BsonDecodeError(ref bson_decode_error) => write!(f, "BSON Decode Error: \"{}\"",bson_decode_error),
             Error::UuidParseError(ref uuid_parse_error) => write!(f, "UUID parse Error: \"{}\"",uuid_parse_error),
+            Error::Neo4jError(ref neo4j_error) => {
+                write!(f, "Neo4j Error: \"{:?}\"",neo4j_error)?;
+
+                let b:&rusted_cypher::GraphError=&neo4j_error;
+
+                match *b {
+                    rusted_cypher::GraphError::Neo4j(ref errors) => {
+                        for e in errors.iter() {
+                            write!(f, "\"{:?}\"",e)?;
+                        }
+                    }
+                    _ => {},
+                }
+
+                Ok(())
+            },
             Error::Other(ref msg) => write!(f, "{}",msg),
         }
     }

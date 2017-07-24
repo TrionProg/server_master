@@ -8,7 +8,7 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
     use std::fs::File;
     use std::io::BufReader;
     use std::io::prelude::*;
-    /*
+
     println!("reading zaratustra");
 
     let file = File::open("zaratustra.txt").unwrap();
@@ -39,16 +39,15 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
             names.push(word);
         }
     }
-    */
 
 
 
-    const USERS_COUNT:usize = 1000_0;
+    const USERS_COUNT:usize = 1000_00;
     const CATEGORIES_COUNT:usize = 10_0;
     const THREADS_COUNT:usize = 10_0;
     const POSTS_COUNT:usize = 100;
-    const FRIENDSHIPS_COUNT:usize = 1000_0;
-    const GIVE_AWARDS_COUNT:usize = 1000_0;
+    const FRIENDSHIPS_COUNT:usize = 1000_00;
+    const GIVE_AWARDS_COUNT:usize = 1000_00;
 
     let mut rng = rand::thread_rng();
 /*
@@ -62,7 +61,14 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
         }
 
         loop {
-            let name=format!("{}{}",names[Range::new(0,names.len()-1).ind_sample(&mut rng)], words[Range::new(0,words.len()-1).ind_sample(&mut rng)]);
+            let mut
+name=format!("{}{}{}{}",names[Range::new(0,names.len()-1).ind_sample(&mut
+rng)], words[Range::new(0,words.len()-1).ind_sample(&mut rng)],
+words[Range::new(0,words.len()-1).ind_sample(&mut rng)],
+words[Range::new(0,words.len()-1).ind_sample(&mut rng)]);
+	        while name.len()>30 {
+                name.pop();
+            }
             let password=words[Range::new(0,words.len()-1).ind_sample(&mut rng)];
 
             let user_id=match users.add_user(name.as_str(),password)? {
@@ -73,7 +79,7 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
             break;
         }
     }
-
+*/
     let user_ids=users.get_user_ids()?;
 
     println!("Generating friendships");
@@ -89,9 +95,9 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
             println!("{}",i);
         }
     }
-
+/*
     println!("Clearing forum");
-    forum.clear()?;
+    //forum.clear()?;
     println!("Generating forum");
 
     for category in 0..CATEGORIES_COUNT {
@@ -114,8 +120,8 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
         }
     }
     */
-    /*
-    let user_ids=users.get_user_ids()?;
+
+    //let user_ids=users.get_user_ids()?;
 
     println!("Giving awards");
     for i in 0..GIVE_AWARDS_COUNT {
@@ -128,7 +134,6 @@ pub fn fill(global:&mut Global, users:&mut Users, images:&mut Images, forum:&mut
         }
     }
     println!("OK");
-    */
 
     Ok(())
 }

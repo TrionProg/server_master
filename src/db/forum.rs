@@ -161,7 +161,8 @@ impl Forum {
     }
 
     fn prepare_cassandra_update_post_query(cassandra_session:&mut CassandraSession) -> Result<BodyResResultPrepared,Error> {
-		let update_post_cql = "UPDATE posts SET message=$1, date=$2 WHERE id=$3";
+		let update_post_cql = "UPDATE posts SET message=?, 
+date=? WHERE id=?";
 
 		let update_post_query_prepared = cassandra_session.prepare(update_post_cql.to_string(), true, true)?.
 			get_body()?.into_prepared().unwrap();

@@ -1,0 +1,39 @@
+Cassandra error: "Server error: CString { string: "line 1:26 mismatched character \'1\' expecting \'$\'" }"
+Cassandra error: "Server error: CString { string: "line 1:26 mismatched character \'1\' expecting \'$\'" }"
+Cassandra error: "Server error: CString { string: "line 1:26 mismatched character \'1\' expecting \'$\'" }"
+ttttt
+aaaa
+reading zaratustra
+parsing zaratustra
+Clearing users
+Generating users
+0
+100
+200
+300
+User Заратустраэтому exists
+400
+User Бессознательная exists
+500
+600
+User ЗдесьЗаратустра exists
+700
+800
+900
+1000
+User Разведостаточно exists
+1100
+1200
+1300
+User Заратустраговор exists
+1400
+User Тыпредостерегаю exists
+1500
+1600
+1700
+1800
+1900
+2000
+2100
+thread 'main' panicked at 'assertion failed: self.is_char_boundary(new_len)', /checkout/src/libcollections/string.rs:1034
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
